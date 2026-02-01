@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hackathon Originality Checker</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 24px; max-width: 980px; }
+      h1 { margin: 0 0 16px; }
+      label { display: block; font-weight: 600; margin-top: 12px; }
+      input, textarea { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 10px; font-size: 14px; }
+      button { margin-top: 12px; padding: 10px 14px; border: 0; border-radius: 10px; font-weight: 700; cursor: pointer; }
+      .row { display: flex; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+      .card { border: 1px solid #e5e5e5; border-radius: 14px; padding: 14px; flex: 1; min-width: 300px; }
+      .muted { color: #666; }
+      .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ddd; font-size: 12px; margin-left: 8px; }
+      ul { margin: 8px 0 0 18px; }
+      li { margin: 6px 0; }
+      .neighbor-title { font-weight: 700; }
+      .neighbor-meta { font-size: 12px; color: #666; margin-top: 2px; }
+      .err { color: #b00020; white-space: pre-wrap; }
+      .ok { color: #0a7a0a; }
+      a { color: inherit; }
+      .topline { display:flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+      .scores { font-size: 18px; font-weight: 800; }
+    </style>
+  </head>
+
+  <body>
+    <h1>Hackathon Idea Originality Checker</h1>
+    <div class="muted">Uses GitHub hackathon repos + time-aware scoring (all-time vs recent).</div>
+
+    <label for="title">Title</label>
+    <input id="title" placeholder="AI Study Buddy" />
+
+    <label for="desc">Description</label>
+    <textarea id="desc" rows="4" placeholder="An app that uses AI to help students plan spaced repetition and track progress."></textarea>
+
+    <button id="btn">Check originality</button>
+    <span id="status" class="muted" style="margin-left:10px;"></span>
+
+    <div id="error" class="err" style="margin-top:12px;"></div>
+
+    <div id="results" style="display:none; margin-top:18px;">
+      <div class="card">
+        <div class="topline">
+          <div class="scores">
+            All-time: <span id="scoreAll"></span> <span id="labelAll" class="pill"></span>
+            &nbsp; | &nbsp;
+            Recent: <span id="scoreRecent"></span> <span id="labelRecent" class="pill"></span>
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <strong>Trend:</strong> <span id="trendLabel"></span>
+          <div class="muted" id="trendNote" style="margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="card">
+          <strong>Suggestions</strong>
+          <ul id="suggestions"></ul>
+        </div>
+
+        <div class="card">
+          <strong>Closest matches (All-time)</strong>
+          <ul id="neighborsAll"></ul>
+        </div>
+
+        <div class="card">
+          <strong>Closest matches (Recent)</strong>
+          <ul id="neighborsRecent"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const API_URL = "http://127.0.0.1:8000/check";
+
+      function el(id) { return document.getElementById(id); }
+
+      function clearList(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+      }
+
+      function addLi(listEl, html) {
+        const li = document.createElement("li");
+        li.innerHTML = html;
+        listEl.appendChild(li);
+      }
+
+      async function checkIdea() {
+        el("error").textContent = "";
+        el("results").style.display = "none";
+        el("status").textContent = "Checking…";
+
+        const title = el("title").value.trim();
+        const description = el("desc").value.trim();
+
+        if (!title || !description) {
+          el("status").textContent = "";
+          el("error").textContent = "Please enter both a title and a description.";
+          return;
+        }
+
+        try {
+          const res = await fetch(API_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, description, k: 5 })
+          });
+
+          if (!res.ok) {
+            const txt = await res.text();
+            throw new Error(`HTTP ${res.status}\n${txt}`);
+          }
+
+          const data = await res.json();
+
+          // Fill scores/trend
+          el("scoreAll").textContent = data.score_all;
+          el("scoreRecent").textContent = data.score_recent;
+          el("labelAll").textContent = data.label_all;
+          el("labelRecent").textContent = data.label_recent;
+          el("trendLabel").textContent = data.trend_label;
+          el("trendNote").textContent = data.trend_note;
+
+          // Suggestions
+          const sug = el("suggestions");
+          clearList(sug);
+          (data.suggestions || []).forEach(s => addLi(sug, `${escapeHtml(s)}`));
+
+          // Neighbors lists
+          const na = el("neighborsAll");
+          const nr = el("neighborsRecent");
+          clearList(na);
+          clearList(nr);
+
+          (data.neighbors_all || []).forEach(n => {
+            addLi(na, `
+              <div class="neighbor-title">${escapeHtml(n.title)}</div>
+              <div class="neighbor-meta">Similarity: ${(n.similarity * 100).toFixed(1)}%</div>
+              <div class="muted">${escapeHtml(n.snippet || "")}</div>
+              <div><a href="${n.url}" target="_blank" rel="noreferrer">View repo</a></div>
+            `);
+          });
+
+          (data.neighbors_recent || []).forEach(n => {
+            addLi(nr, `
+              <div class="neighbor-title">${escapeHtml(n.title)}</div>
+              <div class="neighbor-meta">Similarity: ${(n.similarity * 100).toFixed(1)}%</div>
+              <div class="muted">${escapeHtml(n.snippet || "")}</div>
+              <div><a href="${n.url}" target="_blank" rel="noreferrer">View repo</a></div>
+            `);
+          });
+
+          el("results").style.display = "block";
+          el("status").textContent = "Done.";
+        } catch (err) {
+          el("status").textContent = "";
+          el("error").textContent = String(err);
+        }
+      }
+
+      // Simple HTML escape for untrusted strings
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      el("btn").addEventListener("click", checkIdea);
+    </script>
+  </body>
+</html>
