@@ -11,6 +11,7 @@ export type TabRenderProps = {
   isScoring: boolean
   projects: Project[]
   suggestions: Suggestion[]
+  totalProjects: number | null
 }
 
 export type TabConfig = {

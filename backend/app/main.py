@@ -142,6 +142,15 @@ def health():
     return {"ok": True}
 
 
+@app.get("/stats")
+def stats():
+    assert store is not None
+    return {
+        "total_projects": store.total_projects,
+        "recent_projects": store.recent_projects,
+    }
+
+
 def _compute_check(req: CheckRequest) -> CheckResponse:
     assert store is not None
 
@@ -170,6 +179,7 @@ def _compute_check(req: CheckRequest) -> CheckResponse:
     suggestions = make_suggestions(
         query_text=qtext,
         neighbor_texts=[*texts_recent, *texts_all],
+        score=score_recent,
     )
 
     return CheckResponse(

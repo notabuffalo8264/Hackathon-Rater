@@ -5,8 +5,10 @@ import {
   buildProjectsFromNeighbors,
   buildSuggestionsFromList,
   commentForScore,
+  promptForCharacter,
   fetchProjects,
   fetchScore,
+  fetchStats,
   fetchSuggestions,
   postIdea,
   type Project,
@@ -23,10 +25,13 @@ function App() {
   const [ideaDescription, setIdeaDescription] = useState('')
   const [lastIdeaText, setLastIdeaText] = useState('')
   const [lastScore, setLastScore] = useState<number | null>(null)
-  const [lastComment, setLastComment] = useState('Tell me your idea.')
+  const [lastComment, setLastComment] = useState(
+    promptForCharacter('monacle-man'),
+  )
   const [isScoring, setIsScoring] = useState(false)
   const [projects, setProjects] = useState<Project[]>([])
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
+  const [totalProjects, setTotalProjects] = useState<number | null>(null)
 
   const handleSubmit = async () => {
     if (ideaDescription.trim().length === 0 || isScoring) {
@@ -36,11 +41,12 @@ function App() {
     setIsScoring(true)
     try {
       await postIdea(ideaDescription)
-      const [scoreResponse, projectNeighbors, suggestionList] =
+      const [scoreResponse, projectNeighbors, suggestionList, stats] =
         await Promise.all([
           fetchScore(),
           fetchProjects(),
           fetchSuggestions(),
+          fetchStats(),
         ])
       const score = scoreResponse.score_recent ?? scoreResponse.score_all
       setLastScore(score)
@@ -48,6 +54,7 @@ function App() {
       setLastIdeaText(ideaDescription.trim())
       setProjects(buildProjectsFromNeighbors(projectNeighbors))
       setSuggestions(buildSuggestionsFromList(suggestionList))
+      setTotalProjects(stats.total_projects)
     } catch (error) {
       setLastScore(null)
       setLastComment(
@@ -64,6 +71,11 @@ function App() {
 
   return (
     <div className="app">
+      {totalProjects !== null && (
+        <div className="projects-count-floating">
+          {totalProjects.toLocaleString()} projects compared
+        </div>
+      )}
       <div className="app__layout">
         <SidebarTabs
           tabs={tabs}
@@ -72,10 +84,18 @@ function App() {
           renderProps={{
             lastIdeaText,
             selectedCharacterId,
-            onSelectCharacter: setSelectedCharacterId,
+            onSelectCharacter: (id) => {
+              setSelectedCharacterId(id)
+              setLastComment(
+                lastScore !== null
+                  ? commentForScore(lastScore, id)
+                  : promptForCharacter(id),
+              )
+            },
             isScoring,
             projects,
             suggestions,
+            totalProjects,
           }}
         />
         <main className="main">

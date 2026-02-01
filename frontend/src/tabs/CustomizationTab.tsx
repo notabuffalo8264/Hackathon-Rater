@@ -9,6 +9,7 @@ type CustomizationTabProps = {
   onSelectCharacter: (id: string) => void
   isScoring: boolean
   projects: Project[]
+  totalProjects: number | null
   suggestions: Suggestion[]
 }
 
@@ -29,7 +30,7 @@ const CustomizationTab: FC<CustomizationTabProps> = ({
             aria-pressed={isSelected}
           >
             <div className="card__header">
-              <CharacterAvatar character={character} size="md" />
+              <CharacterAvatar character={character} size="md" state="idle" />
               <div>
                 <h3>{character.name}</h3>
                 <p className="card__summary">{character.description}</p>

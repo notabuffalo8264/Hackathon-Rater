@@ -28,10 +28,10 @@ const SuggestionsTab: FC<SuggestionsTabProps> = ({
     <div className="card-list">
       {suggestions.map((suggestion) => (
         <article className="card" key={suggestion.id}>
-          <p className="card__summary">{suggestion.text}</p>
-          <span className={`impact impact--${suggestion.impact}`}>
-            {suggestion.impact} impact
-          </span>
+          <div className="card__header">
+            <p className="card__summary">{suggestion.text}</p>
+            {suggestion.isBeta && <span className="beta-badge">Beta</span>}
+          </div>
         </article>
       ))}
     </div>

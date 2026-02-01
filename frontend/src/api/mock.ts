@@ -7,12 +7,16 @@ export type Project = {
   similarity: number
   tags: string[]
   url?: string
+  repoUrl?: string
+  demoUrl?: string
+  devpostUrl?: string
+  startedDate?: string
 }
 
 export type Suggestion = {
   id: string
   text: string
-  impact: 'low' | 'med' | 'high'
+  isBeta?: boolean
 }
 
 export type CheckRequest = {
@@ -63,6 +67,11 @@ export type ScoreResponse = {
   trend_note: string
 }
 
+export type StatsResponse = {
+  total_projects: number
+  recent_projects: number
+}
+
 const commentPools = {
   harsh: [
     'Oof. We need a new angle.',
@@ -91,10 +100,88 @@ const commentPools = {
   ],
 }
 
-const characterFlavor: Record<string, string[]> = {
-  'monacle-man': ['Hmm… quite intriguing.', 'Remarkably refined.', 'A bold proposal.'],
-  'sniffer-dog': ['*sniff sniff* promising!', 'I smell potential.', 'This one has a scent.'],
-  'wizard-orb': ['The orb foresees… success!', 'Mystic signs are strong.', 'The future glows.'],
+const characterCommentPools: Record<string, typeof commentPools> = {
+  'monacle-man': {
+    harsh: [
+      'Dear me. That needs refinement.',
+      'A rough draft at best.',
+      'We must elevate this.',
+    ],
+    skeptical: [
+      'An interesting notion… albeit unpolished.',
+      'The intent is visible; the execution is not.',
+      'Let us improve the form.',
+    ],
+    neutral: [
+      'Quite serviceable, with room to grow.',
+      'Mixed, yet promising.',
+      'A respectable start.',
+    ],
+    positive: [
+      'Commendable. This could mature nicely.',
+      'A strong foundation, indeed.',
+      'Well‑considered and tasteful.',
+    ],
+    excited: [
+      'Splendid. This is truly refined.',
+      'Exceptional polish. Bravo.',
+      'A bold, elegant proposal.',
+    ],
+  },
+  'sniffer-dog': {
+    harsh: [
+      '*sniff* Hmm… not good.',
+      'This trail goes nowhere.',
+      'Needs a new scent.',
+    ],
+    skeptical: [
+      '*sniff sniff* maybe…',
+      'I’m not sold yet.',
+      'Let’s follow the trail further.',
+    ],
+    neutral: [
+      'Not bad. I smell potential.',
+      'A decent scent to chase.',
+      'There’s something here.',
+    ],
+    positive: [
+      'Oh yes. Promising scent!',
+      'This one’s worth chasing.',
+      'Nice trail. Keep going.',
+    ],
+    excited: [
+      'Big scent! This is exciting.',
+      'I’m all in—run with it!',
+      'Top‑tier trail. Let’s go!',
+    ],
+  },
+  'wizard-orb': {
+    harsh: [
+      'The orb frowns upon this path.',
+      'Dark omens… rethink the spell.',
+      'The magic is not yet formed.',
+    ],
+    skeptical: [
+      'The mist is unclear.',
+      'I sense promise, but it wavers.',
+      'We must strengthen the incantation.',
+    ],
+    neutral: [
+      'A steady glow. There is potential.',
+      'The signs are mixed, yet hopeful.',
+      'A fair beginning.',
+    ],
+    positive: [
+      'The orb brightens—well done!',
+      'Strong magic in this idea.',
+      'The future leans favorable.',
+    ],
+    excited: [
+      'The orb blazes! A powerful vision.',
+      'Destiny smiles upon this.',
+      'Magnificent—cast it forward!',
+    ],
+  },
 }
 
 export const commentForScore = (score: number, characterId: string) => {
@@ -109,12 +196,34 @@ export const commentForScore = (score: number, characterId: string) => {
             ? 'positive'
             : 'excited'
 
-  const basePool = commentPools[poolKey]
-  const flavorPool = characterFlavor[characterId]
-  const pool = flavorPool?.length ? [...basePool, ...flavorPool] : basePool
-  const selection = pool[score % pool.length]
+  const poolSource = characterCommentPools[characterId] ?? commentPools
+  const pool = poolSource[poolKey]
+  const selection = pool[Math.floor(Math.random() * pool.length)]
 
   return selection
+}
+
+export const promptForCharacter = (characterId: string) => {
+  const prompts: Record<string, string[]> = {
+    'monacle-man': [
+      'Do share your idea, if you please.',
+      'Present your concept, if you will.',
+      'I await your proposal.',
+    ],
+    'sniffer-dog': [
+      'Sniff sniff… what’s your idea?',
+      'Let me smell the concept!',
+      'Share the idea—I’ll follow the trail.',
+    ],
+    'wizard-orb': [
+      'Reveal your idea, and we shall see.',
+      'Speak your concept into the orb.',
+      'Let us glimpse your vision.',
+    ],
+  }
+
+  const pool = prompts[characterId] ?? ['Tell me your idea.']
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? '/api'
@@ -162,13 +271,14 @@ export const postIdea = async (description: string) =>
 export const fetchScore = async (): Promise<ScoreResponse> =>
   getJson<ScoreResponse>('/score')
 
+export const fetchStats = async (): Promise<StatsResponse> =>
+  getJson<StatsResponse>('/stats')
+
 export const fetchProjects = async (): Promise<Neighbor[]> =>
   getJson<Neighbor[]>('/projects')
 
 export const fetchSuggestions = async (): Promise<string[]> =>
   getJson<string[]>('/suggestions')
-
-const impacts: Suggestion['impact'][] = ['low', 'med', 'high']
 
 export const buildProjectsFromNeighbors = (neighbors: Neighbor[]): Project[] =>
   neighbors.map((neighbor, index) => ({
@@ -178,14 +288,27 @@ export const buildProjectsFromNeighbors = (neighbors: Neighbor[]): Project[] =>
     similarity: neighbor.similarity,
     tags: neighbor.built_with_tags ?? [],
     url: neighbor.repo_url ?? neighbor.demo_url ?? neighbor.url ?? undefined,
+    repoUrl: neighbor.repo_url ?? undefined,
+    demoUrl: neighbor.demo_url ?? undefined,
+    devpostUrl:
+      neighbor.url && neighbor.url.includes('devpost.com')
+        ? neighbor.url
+        : undefined,
+    startedDate: neighbor.started_date ?? undefined,
   }))
 
+const BETA_PREFIX = '[BETA] '
+
 export const buildSuggestionsFromList = (suggestions: string[]): Suggestion[] =>
-  suggestions.map((text, index) => ({
-    id: `${index}-${text.slice(0, 24)}`,
-    text,
-    impact: impacts[index % impacts.length],
-  }))
+  suggestions.map((text, index) => {
+    const isBeta = text.startsWith(BETA_PREFIX)
+    const cleanText = isBeta ? text.slice(BETA_PREFIX.length) : text
+    return {
+      id: `${index}-${cleanText.slice(0, 24)}`,
+      text: cleanText,
+      isBeta,
+    }
+  })
 
 export const getCharacterName = (id: string) =>
   characters.find((character) => character.id === id)?.name ?? 'Unknown'

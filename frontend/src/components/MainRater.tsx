@@ -28,24 +28,19 @@ const MainRater: FC<MainRaterProps> = ({
     inputRef.current?.focus()
   }, [])
 
-  const animateKey = `${lastScore ?? 'none'}-${lastComment}-${isScoring ? 'thinking' : 'done'}`
-
   return (
     <section className="main-rater" aria-label="Idea rating">
       <div className="avatar-stage">
         <div className="avatar-wrapper">
-          <CharacterAvatar character={character} />
-          {lastScore !== null && (
-            <div className="score-badge" aria-hidden="true">
-              {lastScore}
-            </div>
-          )}
+          <CharacterAvatar
+            character={character}
+            state={lastScore === null ? 'idle' : 'active'}
+          />
         </div>
         <SpeechBubble
           comment={lastComment}
           score={lastScore}
           isThinking={isScoring}
-          animateKey={animateKey}
         />
       </div>
 
@@ -62,6 +57,12 @@ const MainRater: FC<MainRaterProps> = ({
           placeholder="Describe your idea…"
           value={ideaDescription}
           onChange={(event) => onDescriptionChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault()
+              onSubmit()
+            }
+          }}
           disabled={isScoring}
           aria-label="Idea description"
           rows={1}
