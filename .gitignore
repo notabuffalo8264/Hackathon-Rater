@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+backend/.venv/
+.venv/
+.venv/
+backend/.venv/
+backend/data/*.faiss
+backend/data/*.npy
+backend/data/projects_meta.json
+backend/data/recent_row_ids.json
+backend/data/row_ids_*.json
+backend/data/*.json
+!backend/data/devpost.jsonl
+!backend/data/projects.jsonl
